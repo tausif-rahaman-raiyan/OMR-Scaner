@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Medical OMR Scanner - 100 Questions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    (function() {
+      try {
+        window.addEventListener('error', function(e) {
+          if (e && e.message && e.message.indexOf('Cannot set property fetch of') !== -1) {
+            if (e.preventDefault) e.preventDefault();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
+      } catch (err) {}
+
+      try {
+        var nativeFetch = window.fetch ? window.fetch.bind(window) : undefined;
+        var activeFetch = nativeFetch;
+        var getter = function() { return activeFetch || nativeFetch; };
+        var setter = function(fn) { activeFetch = fn; };
+
+        if (typeof Window !== 'undefined' && Window.prototype) {
+          try {
+            Object.defineProperty(Window.prototype, 'fetch', {
+              get: getter,
+              set: setter,
+              configurable: true,
+              enumerable: true
+            });
+          } catch (e1) {}
+        }
+
+        try {
+          Object.defineProperty(window, 'fetch', {
+            get: getter,
+            set: setter,
+            configurable: true,
+            enumerable: true
+          });
+        } catch (e2) {}
+
+        if (typeof globalThis !== 'undefined') {
+          try {
+            Object.defineProperty(globalThis, 'fetch', {
+              get: getter,
+              set: setter,
+              configurable: true,
+              enumerable: true
+            });
+          } catch (e3) {}
+        }
+
+        var curr = Object.getPrototypeOf(window);
+        while (curr && curr !== Object.prototype) {
+          try {
+            Object.defineProperty(curr, 'fetch', {
+              get: getter,
+              set: setter,
+              configurable: true,
+              enumerable: true
+            });
+          } catch (e4) {}
+          curr = Object.getPrototypeOf(curr);
+        }
+      } catch (err) {}
+    })();
+  </script>
+  <!-- OpenCV.js -->
+  <script async id="opencv-script" src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript"></script>
+<script src="/_aistudio-iframe.js?v=2c34bde1"></script></head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header>
+      <div class="header-top">
+        <div class="brand">
+          <div class="brand-icon">✓</div>
+          <div>
+            <h1>Medical OMR Scanner</h1>
+            <p>100 Questions (A–D) • OpenCV.js Browser Engine • Exam Console Bridge</p>
+          </div>
+        </div>
+        <div id="cvStatus" class="status-badge loading">
+          <span>●</span> Initializing OpenCV.js...
+        </div>
+      </div>
+
+      <!-- Action Bar -->
+      <div class="actions-bar">
+        <!-- Hidden file inputs -->
+        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;">
+
+        <button class="btn btn-primary" id="btnTakePhoto">
+          📷 Take Photo
+        </button>
+        <button class="btn btn-secondary" id="btnChoosePhoto">
+          📁 Choose Image
+        </button>
+        <button class="btn btn-secondary" id="btnLoadSample">
+          ⚡ Load Sample OMR (Demo)
+        </button>
+        <button class="btn btn-secondary" id="btnToggleLiveCam">
+          📹 Live Webcam Mode
+        </button>
+        <button class="btn btn-success" id="btnRescan">
+          🔄 Scan / Reprocess
+        </button>
+      </div>
+
+      <!-- Live Video View (hidden by default) -->
+      <div id="videoContainer" style="display: none; margin-top: 12px; background: #000; padding: 12px; border-radius: 8px; text-align: center;">
+        <video id="webcamVideo" autoplay playsinline style="max-width: 100%; max-height: 400px; border-radius: 6px;"></video>
+        <div style="margin-top: 8px; display: flex; gap: 8px; justify-content: center;">
+          <button class="btn btn-primary" id="btnCaptureFrame">📸 Capture Frame</button>
+          <button class="btn btn-secondary" id="btnCloseCam">Close Camera</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Review Warning Alert Banner -->
+    <div id="reviewWarning" class="warning-banner" style="display: none;">
+      <span>⚠</span>
+      <span id="warningText">5 questions need review before copying.</span>
+    </div>
+
+    <!-- Stats Ribbon -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Total Questions</span>
+        <span class="stat-value">100</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Answered</span>
+        <span class="stat-value stat-answered" id="statAnswered">0</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Blank</span>
+        <span class="stat-value stat-blank" id="statBlank">100</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Multiple</span>
+        <span class="stat-value stat-multiple" id="statMultiple">0</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Confidence</span>
+        <span class="stat-value stat-confidence" id="statConfidence">0%</span>
+      </div>
+    </div>
+
+    <!-- Main 2-Column Layout -->
+    <div class="main-layout">
+      <!-- Left: Image Preview with detection markers -->
+      <div class="preview-panel">
+        <div class="panel-header">
+          <span class="panel-title">Processed OMR View</span>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <label style="font-size: 12px; color: var(--text-muted);">
+              <input type="checkbox" id="chkOverlay" checked> Markers Overlay
+            </label>
+            <button class="btn btn-secondary" id="btnRotateSheet" style="padding: 4px 8px; font-size: 12px;">
+              ↻ Rotate 90°
+            </button>
+          </div>
+        </div>
+
+        <div class="canvas-wrapper" id="canvasWrapper">
+          <canvas id="displayCanvas"></canvas>
+          <canvas id="overlayCanvas" class="overlay-canvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Right: Answers Table & Console Code Generator -->
+      <div class="results-panel">
+        <div class="tab-nav">
+          <button class="tab-btn active" id="tabAnswersBtn">Detected Answers (100)</button>
+          <button class="tab-btn" id="tabCodeBtn">Generated Console Script</button>
+        </div>
+
+        <!-- Tab 1: Answers Table -->
+        <div id="tabAnswersContent">
+          <div class="answers-container">
+            <table class="answers-table">
+              <thead>
+                <tr>
+                  <th style="width: 15%;">Q #</th>
+                  <th style="width: 25%;">Answer</th>
+                  <th style="width: 35%;">Status</th>
+                  <th style="width: 25%;">Confidence</th>
+                </tr>
+              </thead>
+              <tbody id="answersTableBody">
+                <!-- Dynamically generated rows 1-100 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 2: Console Script -->
+        <div id="tabCodeContent" style="display: none;">
+          <div class="code-container" id="codeOutput">// Scan an OMR sheet first to generate script</div>
+          <div class="code-actions">
+            <button class="btn btn-primary" id="btnCopyScript">
+              📋 Copy Console Code
+            </button>
+            <button class="btn btn-secondary" id="btnSelectAnswers">
+              ✓ Select Answers Only
+            </button>
+            <button class="btn btn-danger" id="btnSelectSubmit">
+              🚀 Select + Submit
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Submit Confirmation Modal -->
+  <div id="submitModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <h3 style="font-size: 18px; font-weight: 700; color: #ef4444;">⚠ Confirm Exam Submission</h3>
+      <p style="font-size: 14px; color: var(--text-muted);">
+        You are generating code that will immediately trigger <code>window.submitExam()</code> on your exam page.
+      </p>
+      <p style="font-size: 13px; color: #f8fafc;">
+        Please make sure you have reviewed all 100 questions and verified any blank or multiple marks before proceeding.
+      </p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btnCancelSubmit">Cancel</button>
+        <button class="btn btn-danger" id="btnConfirmSubmit">I Understand, Copy Submit Script</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
